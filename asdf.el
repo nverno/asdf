@@ -1,4 +1,4 @@
-;;; asdf --- 
+;;; asdf --- asdf version manager
 
 ;; This is free and unencumbered software released into the public domain.
 
@@ -30,7 +30,7 @@
 
 ;;; Description:
 
-;; asdf version manager
+;; asdf version manager interface
 
 ;;; Code:
 (eval-when-compile
