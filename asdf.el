@@ -34,27 +34,22 @@
 
 ;;; Code:
 (eval-when-compile
-  (require 'cl-lib))
-
-(defgroup asdf nil "asdf")
-
-;; -------------------------------------------------------------------
-;;; Utils
-
-;; -------------------------------------------------------------------
-;;; List
-
-(eval-when-compile
+  (require 'cl-lib)
   (defvar tabulated-list-format)
   (defvar tabulated-list-entries))
 (declare-function tabulated-list-init-header "tabulated-list")
 (declare-function tabulated-list-print "tabulated-list")
 (declare-function tabulated-list-get-entry "tabulated-list")
 
+(defgroup asdf nil "asdf")
+
 (defface asdf-checkmark-face
   '((t (:background "grey10" :foreground "green")))
   "checkmark"
   :group 'asdf)
+
+;; -------------------------------------------------------------------
+;;; List
 
 ;; format list of available / installed versions for PLUGIN
 (defsubst asdf--versions (plugin)
@@ -113,10 +108,18 @@
 
 ;;; Mode
 
+(defvar asdf-list-menu
+  '("asdf"
+    ["Install" asdf-list-install t]
+    ["Revert" asdf-list-revert t]))
+
 (defvar asdf-list-mode-map
   (let ((km (make-sparse-keymap)))
+    (easy-menu-define nil km nil asdf-list-menu)
     (define-key km (kbd "RET") 'asdf-list-install)
     (define-key km "g"         'asdf-list-revert)
+    (define-key km "j"         'forward-line)
+    (define-key km "k"         'previous-line)
     km))
 
 (define-derived-mode asdf-list-mode tabulated-list-mode "asdf"
