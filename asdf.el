@@ -54,6 +54,7 @@
 
 (eval-when-compile
   (defmacro asdf-list-buffer () `(get-buffer-create "*asdf*"))
+
   (defmacro asdf-process-buffer (&optional no-erase)
     `(progn (with-current-buffer (get-buffer-create "*asdf-process*")
               ,(unless no-erase
@@ -75,10 +76,34 @@
                 ,(if error `,error
                    `(message "[asdf]: %s" (substring m 0 -1)))
               ,@body)))))
+
   (defmacro asdf-name/version ()
     `(interactive
       (list (aref (tabulated-list-get-entry) 3)
-            (tabulated-list-get-id)))))
+            (tabulated-list-get-id))))
+
+  (defmacro asdf--read-plugin ()
+    `(ido-completing-read
+      "Plugin: " (nreverse (process-lines "asdf" "plugin-list"))))
+
+  (defmacro asdf--read-version (plugin &optional all)
+    `(ido-completing-read
+      "Version: " (nreverse (process-lines
+                             "asdf" ,(if all "list-all" "list") ,plugin)))))
+
+;; -------------------------------------------------------------------
+;;; Synchronous
+
+;;;###autoload
+(defun asdf-use (plugin version &optional local)
+  (interactive
+   (let ((plugin (asdf--read-plugin)))
+     (list plugin (asdf--read-version plugin))))
+  (let ((res (call-process "asdf" nil nil nil
+                           (if local "local" "global") plugin version)))
+    (if (zerop res)
+        (message "[asdf]: using %s %s" plugin version)
+      (message "[asdf]: %s" res))))
 
 ;; -------------------------------------------------------------------
 ;;; List
@@ -123,7 +148,7 @@
     (with-current-buffer (asdf-list-buffer)
       (setq tabulated-list-format `[(,plugin 20 t)
                                     ("Installed" 15 nil)
-                                    ("Global" 10 nil)])
+                                    ("Current" 10 nil)])
       (setq tabulated-list-entries (nreverse ver))
       (asdf-list-mode)
       (setq-local asdf-list-plugin plugin)
@@ -149,11 +174,16 @@
   (display-buffer "*asdf-process*"))
 
 ;; switch asdf current version to version at point in `asdf-list-mode'
-(defun asdf-list-global (plugin version)
+(defun asdf-list-use (plugin version &optional local)
   (asdf-name/version)
-  (with-asdf-output "global" nil
+  (with-asdf-output (if local "local" "global") nil
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
-    (message "[asdf]: using %s %s" plugin version)))
+    (message "[asdf]: %s %s using %s" (if local "local" "global")
+             plugin version)))
+
+(defun asdf-list-use-local (plugin version)
+  (asdf-name/version)
+  (asdf-list-use plugin version 'local))
 
 (defun asdf-list-uninstall (plugin version)
   (asdf-name/version)
@@ -174,6 +204,7 @@
   '("asdf"
     ["Install" asdf-list-install t]
     ["Set global version" asdf-list-use t]
+    ["Set local version" asdf-list-use-local t]
     ["Uninstall" asdf-list-uninstall t]
     ["Installation path" asdf-list-where t]
     ["Revert" asdf-list-revert t]))
@@ -186,7 +217,8 @@
     (define-key km (kbd "RET") 'asdf-list-install)
     (define-key km "i"         'asdf-list-install)
     (define-key km "r"         'asdf-list-revert)
-    (define-key km "g"         'asdf-list-global)
+    (define-key km "v"         'asdf-list-use)
+    (define-key km "l"         'asdf-list-use-local)
     (define-key km "u"         'asdf-list-uninstall)
     (define-key km "w"         'asdf-list-where)
     km))
