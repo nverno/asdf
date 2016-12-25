@@ -1,4 +1,4 @@
-(require 'asdf-tools)
+(require 'asdf)
 (require 'ert)
 
 (defun asdf--run-tests ()
