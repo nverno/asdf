@@ -5,7 +5,7 @@
 
 Description:
 
-asdf version manager
+emacs interface to [asdf version manager](https://github.com/asdf-vm/asdf)
 
 
 ---
