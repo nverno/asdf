@@ -72,9 +72,9 @@
        (set-process-sentinel
         proc
         #'(lambda (p m)
+            (message "[asdf]: %s" (substring m 0 -1))
             (if (not (zerop (process-exit-status p)))
-                ,(if error `,error
-                   `(message "[asdf]: %s" (substring m 0 -1)))
+                ,(if error `,error)
               ,@body)))))
 
   (defmacro asdf-name/version ()
@@ -89,16 +89,26 @@
   (defmacro asdf--read-version (plugin &optional all)
     `(ido-completing-read
       "Version: " (nreverse (process-lines
-                             "asdf" ,(if all "list-all" "list") ,plugin)))))
+                             "asdf" ,(if all "list-all" "list") ,plugin))))
+
+  (defmacro asdf--read-plugin/version ()
+    `(let ((plugin (asdf--read-plugin)))
+       (list plugin (asdf--read-version plugin)))))
 
 ;; -------------------------------------------------------------------
-;;; Synchronous
+;;; Commands
+
+;;;###autoload
+(defun asdf-install (plugin version &optional error success)
+  (interactive
+   (asdf--read-plugin/version))
+  (with-asdf-output "install" (if error (funcall error))
+    (if success (funcall success))))
 
 ;;;###autoload
 (defun asdf-use (plugin version &optional local)
   (interactive
-   (let ((plugin (asdf--read-plugin)))
-     (list plugin (asdf--read-version plugin))))
+   (asdf--read-plugin/version))
   (let ((res (call-process "asdf" nil nil nil
                            (if local "local" "global") plugin version)))
     (if (zerop res)
