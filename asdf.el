@@ -123,12 +123,13 @@
   (let ((all (process-lines "asdf" "list-all" plugin))
         (inst (ignore-errors (process-lines "asdf" "list" plugin)))
         (global (ignore-errors
-                  (car (process-lines "asdf" "current" plugin)))))
+                  (car (split-string
+                        (car (process-lines "asdf" "current" plugin)))))))
     (cl-loop for v in all
        collect (list v (vector v (if (cl-member v inst :test 'string=)
                                      (propertize "✓" 'face 'asdf-checkmark-face)
                                    "")
-                               (if (string-prefix-p v global)
+                               (if (string= v global)
                                    (propertize "✓" 'face
                                                'font-lock-warning-face)
                                  "")
