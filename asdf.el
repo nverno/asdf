@@ -77,7 +77,7 @@
                 ,(if error `,error)
               ,@body)))))
 
-  (defmacro asdf-name/version ()
+  (defmacro asdf--name/version ()
     `(interactive
       (list (aref (tabulated-list-get-entry) 3)
             (tabulated-list-get-id))))
@@ -93,22 +93,43 @@
 
   (defmacro asdf--read-plugin/version ()
     `(let ((plugin (asdf--read-plugin)))
-       (list plugin (asdf--read-version plugin)))))
+       (list plugin (asdf--read-version plugin))))
+
+  (defmacro asdf--current-version (plugin)
+  `(ignore-errors
+     (car (split-string
+           (car (process-lines "asdf" "current" ,plugin))))))
+
+  ;; read version of PLUGIN from .tool-versions. Find first .tool-versions
+  ;; file by default, or if GLOBAL look in user's home dir or use
+  ;; GLOBAL-FILE if non-nil
+  (defmacro asdf--read-version (plugin &optional global global-file)
+    `(let ((conf
+            ,(if (not global)
+                 '(locate-dominating-file (or buffer-file-name
+                                              default-directory)
+                                          ".tool-versions")
+               (or global-file
+                   '(expand-file-name ".tool-versions" (getenv "HOME"))))))
+       (when conf
+         (with-temp-buffer
+           (insert-file-contents (expand-file-name ".tool-versions" conf))
+           (when (re-search-forward
+                  (concat "^" ,plugin " +\\([^ \t\n\r]+\\)") nil 'move)
+             (match-string-no-properties 1)))))))
 
 ;; -------------------------------------------------------------------
 ;;; Commands
 
 ;;;###autoload
 (defun asdf-install (plugin version &optional error success)
-  (interactive
-   (asdf--read-plugin/version))
+  (interactive (asdf--read-plugin/version))
   (with-asdf-output "install" (if error (funcall error))
     (if success (funcall success))))
 
 ;;;###autoload
 (defun asdf-use (plugin version &optional local)
-  (interactive
-   (asdf--read-plugin/version))
+  (interactive (asdf--read-plugin/version))
   (let ((res (call-process "asdf" nil nil nil
                            (if local "local" "global") plugin version)))
     (if (zerop res)
@@ -122,14 +143,12 @@
 (defsubst asdf--versions (plugin)
   (let ((all (process-lines "asdf" "list-all" plugin))
         (inst (ignore-errors (process-lines "asdf" "list" plugin)))
-        (global (ignore-errors
-                  (car (split-string
-                        (car (process-lines "asdf" "current" plugin)))))))
+        (current (asdf--current-version plugin)))
     (cl-loop for v in all
        collect (list v (vector v (if (cl-member v inst :test 'string=)
                                      (propertize "✓" 'face 'asdf-checkmark-face)
                                    "")
-                               (if (string= v global)
+                               (if (string= v current)
                                    (propertize "✓" 'face
                                                'font-lock-warning-face)
                                  "")
@@ -178,7 +197,7 @@
 
 ;; install VERSION of PLUGIN at point in `asdf-list-mode'
 (defun asdf-list-install (plugin version)
-  (asdf-name/version)
+  (asdf--name/version)
   (with-asdf-output "install" nil
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
     (with-current-buffer (asdf-process-buffer) (view-mode)))
@@ -186,24 +205,24 @@
 
 ;; switch asdf current version to version at point in `asdf-list-mode'
 (defun asdf-list-use (plugin version &optional local)
-  (asdf-name/version)
+  (asdf--name/version)
   (with-asdf-output (if local "local" "global") nil
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
     (message "[asdf]: %s %s using %s" (if local "local" "global")
              plugin version)))
 
 (defun asdf-list-use-local (plugin version)
-  (asdf-name/version)
+  (asdf--name/version)
   (asdf-list-use plugin version 'local))
 
 (defun asdf-list-uninstall (plugin version)
-  (asdf-name/version)
+  (asdf--name/version)
   (with-asdf-output "uninstall" nil
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
     (message "[asdf]: uninstalled %s %s" plugin version)))
 
 (defun asdf-list-where (plugin version)
-  (asdf-name/version)
+  (asdf--name/version)
   (with-asdf-output "where" nil
     (with-current-buffer (asdf-process-buffer 'no-erase)
       (message "[asdf]: %s" (buffer-string)))))
