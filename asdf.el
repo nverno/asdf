@@ -44,6 +44,9 @@
 
 (defgroup asdf nil "asdf" :group 'external)
 
+(defvar asdf-after-use-hook ()
+  "Hook run after `asdf-use' sets current version.")
+
 (defface asdf-checkmark-face
   '((t (:background "grey10" :foreground "green")))
   "checkmark"
@@ -95,11 +98,6 @@
     `(let ((plugin (asdf--read-plugin)))
        (list plugin (asdf--read-version plugin))))
 
-  (defmacro asdf--current-version (plugin)
-  `(ignore-errors
-     (car (split-string
-           (car (process-lines "asdf" "current" ,plugin))))))
-
   ;; read version of PLUGIN from .tool-versions. Find first .tool-versions
   ;; file by default, or if GLOBAL look in user's home dir or use
   ;; GLOBAL-FILE if non-nil
@@ -132,9 +130,16 @@
   (interactive (asdf--read-plugin/version))
   (let ((res (call-process "asdf" nil nil nil
                            (if local "local" "global") plugin version)))
-    (if (zerop res)
-        (message "[asdf]: using %s %s" plugin version)
-      (message "[asdf]: %s" res))))
+    (if (not (zerop res))
+        (message "[asdf]: %s" res)
+      (message "[asdf]: using %s %s" plugin version)
+      (run-hooks 'asdf-after-use-hook))))
+
+(defun asdf-current-version (plugin)
+  "Return current version for PLUGIN."
+  (ignore-errors
+    (car (split-string
+          (car (process-lines "asdf" "current" plugin))))))
 
 ;; -------------------------------------------------------------------
 ;;; List
@@ -143,7 +148,7 @@
 (defsubst asdf--versions (plugin)
   (let ((all (process-lines "asdf" "list-all" plugin))
         (inst (ignore-errors (process-lines "asdf" "list" plugin)))
-        (current (asdf--current-version plugin)))
+        (current (asdf-current-version plugin)))
     (cl-loop for v in all
        collect (list v (vector v (if (cl-member v inst :test 'string=)
                                      (propertize "✓" 'face 'asdf-checkmark-face)
@@ -209,7 +214,8 @@
   (with-asdf-output (if local "local" "global") nil
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
     (message "[asdf]: %s %s using %s" (if local "local" "global")
-             plugin version)))
+             plugin version))
+  (run-hooks 'asdf-after-use-hook))
 
 (defun asdf-list-use-local (plugin version)
   (asdf--name/version)
