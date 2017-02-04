@@ -38,6 +38,8 @@
   (defvar tabulated-list-format)
   (defvar tabulated-list-entries)
   (defvar asdf-list-plugin))
+(autoload 'string-trim-right "subr-x")
+
 (declare-function tabulated-list-init-header "tabulated-list")
 (declare-function tabulated-list-print "tabulated-list")
 (declare-function tabulated-list-get-entry "tabulated-list")
@@ -135,11 +137,22 @@
       (message "[asdf]: using %s %s" plugin version)
       (run-hooks 'asdf-after-use-hook))))
 
+;;;###autoload
 (defun asdf-current-version (plugin)
   "Return current version for PLUGIN."
   (ignore-errors
     (car (split-string
           (car (process-lines "asdf" "current" plugin))))))
+
+;;;###autoload
+(defun asdf-where (plugin &optional current)
+  "Path to PLUGIN, optionally full path to CURRENT version of PLUGIN."
+  (let ((base
+         (string-trim-right
+          (shell-command-to-string (concat "asdf where " plugin)))))
+    (if current
+        (concat base (asdf-current-version plugin))
+      base)))
 
 ;; -------------------------------------------------------------------
 ;;; List
