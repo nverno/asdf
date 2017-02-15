@@ -216,10 +216,11 @@
 ;; install VERSION of PLUGIN at point in `asdf-list-mode'
 (defun asdf-list-install (plugin version)
   (asdf--name/version)
-  (with-asdf-output "install" nil
-    (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
-    (with-current-buffer (asdf-process-buffer) (view-mode)))
-  (display-buffer "*asdf-process*"))
+  (and (y-or-n-p (format "Install %s %s?" plugin version))
+       (with-asdf-output "install" nil
+         (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
+         (with-current-buffer (asdf-process-buffer) (view-mode)))
+       (display-buffer "*asdf-process*")))
 
 ;; switch asdf current version to version at point in `asdf-list-mode'
 (defun asdf-list-use (plugin version &optional local)
@@ -236,9 +237,10 @@
 
 (defun asdf-list-uninstall (plugin version)
   (asdf--name/version)
-  (with-asdf-output "uninstall" nil
-    (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
-    (message "[asdf]: uninstalled %s %s" plugin version)))
+  (and (y-or-n-p (format "Uninstall %s %s?" plugin version))
+       (with-asdf-output "uninstall" nil
+         (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
+         (message "[asdf]: uninstalled %s %s" plugin version))))
 
 (defun asdf-list-where (plugin version)
   (asdf--name/version)
