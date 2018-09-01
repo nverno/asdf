@@ -78,23 +78,5 @@
   `(let ((plugin (asdf--read-plugin)))
      (list plugin (asdf--read-version plugin))))
 
-;; read version of PLUGIN from .tool-versions. Find first .tool-versions
-;; file by default, or if GLOBAL look in user's home dir or use
-;; GLOBAL-FILE if non-nil
-;; (defmacro asdf--read-version (plugin &optional global global-file)
-;;   `(let ((conf
-;;           ,(if (not global)
-;;                '(locate-dominating-file (or buffer-file-name
-;;                                             default-directory)
-;;                                         ".tool-versions")
-;;              (or global-file
-;;                  '(expand-file-name ".tool-versions" (getenv "HOME"))))))
-;;      (when conf
-;;        (with-temp-buffer
-;;          (insert-file-contents (expand-file-name ".tool-versions" conf))
-;;          (when (re-search-forward
-;;                 (concat "^" ,plugin " +\\([^ \t\n\r]+\\)") nil 'move)
-;;            (match-string-no-properties 1))))))
-
 (provide 'asdf-macros)
 ;;; asdf-macros.el ends here
