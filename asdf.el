@@ -102,7 +102,7 @@
   "Return current version for PLUGIN."
   (ignore-errors
     (car (split-string
-          (car (process-lines "asdf" "current" plugin))))))
+          (car (process-lines "asdf" "current" plugin)) "[ (]"))))
 
 ;;;###autoload
 (defun asdf-where (plugin &optional current)
@@ -120,7 +120,8 @@
 ;; format list of available / installed versions for PLUGIN
 (defun asdf--versions (plugin)
   (let ((all (process-lines "asdf" "list-all" plugin))
-        (inst (ignore-errors (process-lines "asdf" "list" plugin)))
+        (inst (ignore-errors
+                (mapcar 'string-trim (process-lines "asdf" "list" plugin))))
         (current (asdf-current-version plugin)))
     (cl-loop for v in all
        collect (list v (vector v (if (cl-member v inst :test 'string=)
