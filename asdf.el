@@ -105,14 +105,10 @@
           (car (process-lines "asdf" "current" plugin)) "[ (]"))))
 
 ;;;###autoload
-(defun asdf-where (plugin &optional current)
-  "Path to PLUGIN, optionally full path to CURRENT version of PLUGIN."
-  (let ((base
-         (string-trim-right
-          (shell-command-to-string (concat "asdf where " plugin)))))
-    (if current
-        (concat base (asdf-current-version plugin))
-      base)))
+(defun asdf-where (plugin)
+  "Full path to current PLUGIN version root directory."
+  (string-trim-right
+   (shell-command-to-string (concat "asdf where " plugin))))
 
 ;; -------------------------------------------------------------------
 ;;; List
