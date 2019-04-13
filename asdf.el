@@ -1,4 +1,4 @@
-;;; asdf --- asdf version manager -*- lexical-binding: t; -*-
+;;; asdf.el --- asdf version manager -*- lexical-binding: t; -*-
 
 ;; This is free and unencumbered software released into the public domain.
 
@@ -35,7 +35,7 @@
 ;;; Code:
 (eval-when-compile
   (require 'cl-lib)
-  (require 'asdf-macros)
+  (require 'asdf-macs)
   (defvar tabulated-list-format)
   (defvar tabulated-list-entries)
   (defvar asdf-list-plugin))
@@ -44,9 +44,9 @@
 (declare-function tabulated-list-print "tabulated-list")
 (declare-function tabulated-list-get-entry "tabulated-list")
 
-(autoload 'string-trim-right "subr-x")
-
-(defgroup asdf nil "asdf" :group 'external)
+(defgroup asdf nil
+  "asdf package manager"
+  :group 'external)
 
 (defvar asdf-after-use-hook ()
   "Hook run after `asdf-use' sets current version.")
@@ -55,6 +55,8 @@
   '((t (:background "grey10" :foreground "green")))
   "checkmark"
   :group 'asdf)
+
+(defalias 'asdf-completing-read 'ido-completing-read)
 
 (defvar asdf-buffer-name "*asdf*")
 (defvar asdf-process-buffer-name "*asdf-process*")
@@ -65,11 +67,9 @@
 (defun asdf--read-version-file (plugin &optional global global-file)
   (let ((conf
          (if (not global)
-             (locate-dominating-file (or buffer-file-name
-                                         default-directory)
-                                     ".tool-versions")
-           (or global-file
-               (expand-file-name ".tool-versions" (getenv "HOME"))))))
+             (locate-dominating-file
+              (or buffer-file-name default-directory) ".tool-versions")
+           (or global-file (expand-file-name ".tool-versions" (getenv "HOME"))))))
     (when conf
       (with-temp-buffer
         (insert-file-contents (expand-file-name ".tool-versions" conf))
@@ -77,14 +77,28 @@
                (concat "^" plugin " +\\([^ \t\n\r]+\\)") nil 'move)
           (match-string-no-properties 1))))))
 
+;; remove ^M from output, scroll to bottom, format a bit
+(defun asdf-process-filter (proc string)
+  (unless (string= string "")
+    (with-current-buffer (process-buffer proc)
+      (goto-char (point-max))
+      ;; if curl is making progress bars, show on just one line
+      (if (ignore-errors
+            (beginning-of-line)
+            (looking-at-p "[ \t]*#*\\([0-9\.%]+$\\)"))
+          (progn (ignore-errors (backward-char))
+                 (delete-region (point) (point-max)))
+        (forward-line))
+      (insert (replace-regexp-in-string "[\r\n]+" "\n" string)))))
+
 ;; -------------------------------------------------------------------
-;;; Commands
+;;; General commands
 
 ;;;###autoload
 (defun asdf-install (plugin version &optional error success)
   (interactive (asdf--read-plugin/version))
-  (with-asdf-output "install"
-      (if error (funcall error))
+  (with-asdf-output "install" plugin version
+    :error (if error (funcall error))
     (if success (funcall success))))
 
 ;;;###autoload
@@ -101,14 +115,12 @@
 (defun asdf-current-version (plugin)
   "Return current version for PLUGIN."
   (ignore-errors
-    (car (split-string
-          (car (process-lines "asdf" "current" plugin)) "[ (]"))))
+    (car (split-string (car (process-lines "asdf" "current" plugin)) "[ (]"))))
 
 ;;;###autoload
 (defun asdf-where (plugin)
   "Full path to current PLUGIN version root directory."
-  (string-trim-right
-   (shell-command-to-string (concat "asdf where " plugin))))
+  (ignore-errors (car (process-lines "asdf" "where" plugin))))
 
 ;; -------------------------------------------------------------------
 ;;; List
@@ -117,38 +129,21 @@
 (defun asdf--versions (plugin)
   (let ((all (process-lines "asdf" "list-all" plugin))
         (inst (ignore-errors
-                (mapcar 'string-trim (process-lines "asdf" "list" plugin))))
+                (mapcar #'string-trim (process-lines "asdf" "list" plugin))))
         (current (asdf-current-version plugin)))
     (cl-loop for v in all
        collect (list v (vector v (if (cl-member v inst :test 'string=)
                                      (propertize "✓" 'face 'asdf-checkmark-face)
                                    "")
                                (if (string= v current)
-                                   (propertize "✓" 'face
-                                               'font-lock-warning-face)
+                                   (propertize "✓" 'face 'font-lock-warning-face)
                                  "")
                                plugin)))))
-
-;; remove ^M from output, scroll to bottom, format a bit
-(defun asdf-list--filter (proc string)
-  (unless (string= string "")
-    (with-current-buffer (process-buffer proc)
-      (goto-char (point-max))
-      ;; if curl is making progress bars, show on just one line
-      (if (ignore-errors
-            (beginning-of-line)
-            (looking-at-p "[ \t]*#*\\([0-9\.%]+$\\)"))
-          (progn (ignore-errors (backward-char))
-                 (delete-region (point) (point-max)))
-        (forward-line))
-      (insert (replace-regexp-in-string "[\r\n]+" "\n" string)))))
 
 ;;;###autoload
 (defun asdf-list (plugin)
   "List asdf managed versions for PLUGIN."
-  (interactive
-   (list
-    (ido-completing-read "Plugin: " (process-lines "asdf" "plugin-list"))))
+  (interactive (list (asdf-read 'plugin)))
   (let ((ver (asdf--versions plugin)))
     (with-current-buffer (asdf-list-buffer)
       (setq tabulated-list-format `[(,plugin 20 t)
@@ -162,46 +157,47 @@
 ;; -------------------------------------------------------------------
 ;;; Interactive list mode functions
 
-;; revert buffer
 (defun asdf-list-revert ()
+  "Revert asdf-list mode buffer."
   (interactive)
   (when (eq major-mode 'asdf-list-mode)
     (asdf-message "Reloading asdf-list...")
     (setq tabulated-list-entries (nreverse (asdf--versions asdf-list-plugin)))
     (revert-buffer)))
 
-;; install VERSION of PLUGIN at point in `asdf-list-mode'
 (defun asdf-list-install (plugin version)
-  (asdf--name/version)
+  "Install PLUGIN VERSION at point."
+  (interactive (asdf--list-name/version))
   (and (y-or-n-p (format "Install %s %s?" plugin version))
-
-       (with-asdf-output "install" nil
-         (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
-         (with-current-buffer (asdf-process-buffer) (view-mode)))
+       (with-asdf-output "install" plugin version
+         (with-current-buffer (asdf-list-buffer)
+           (asdf-list-revert))
+         (with-current-buffer (asdf-process-buffer)
+           (view-mode)))
        (display-buffer asdf-process-buffer-name)))
 
 ;; switch asdf current version to version at point in `asdf-list-mode'
 (defun asdf-list-use (plugin version &optional local)
-  (asdf--name/version)
-  (with-asdf-output (if local "local" "global") nil
+  (interactive (asdf--list-name/version))
+  (with-asdf-output (if local "local" "global") plugin version
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
     (asdf-message "%s %s using %s" (if local "local" "global") plugin version))
   (run-hooks 'asdf-after-use-hook))
 
 (defun asdf-list-use-local (plugin version)
-  (asdf--name/version)
+  (interactive (asdf--list-name/version))
   (asdf-list-use plugin version 'local))
 
 (defun asdf-list-uninstall (plugin version)
-  (asdf--name/version)
+  (interactive (asdf--list-name/version))
   (and (y-or-n-p (format "Uninstall %s %s?" plugin version))
-       (with-asdf-output "uninstall" nil
+       (with-asdf-output "uninstall" plugin version
          (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
          (asdf-message "uninstalled %s %s" plugin version))))
 
 (defun asdf-list-where (plugin version)
-  (asdf--name/version)
-  (with-asdf-output "where"
+  (interactive (asdf--list-name/version))
+  (with-asdf-output "where" plugin version
     (asdf-message "%s not installed" (tabulated-list-get-id))
     (with-current-buffer (asdf-process-buffer 'no-erase)
       (asdf-message "%s" (buffer-string)))))
