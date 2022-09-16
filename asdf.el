@@ -56,7 +56,7 @@
   "checkmark"
   :group 'asdf)
 
-(defalias 'asdf-completing-read 'ido-completing-read)
+(defalias 'asdf-completing-read 'completing-read)
 
 (defvar asdf-buffer-name "*asdf*")
 (defvar asdf-process-buffer-name "*asdf-process*")
