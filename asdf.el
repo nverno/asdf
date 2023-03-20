@@ -129,10 +129,9 @@ If LOCAL, use locally."
 ;; -------------------------------------------------------------------
 ;;; List
 
-(defun asdf--versions (plugin)
-  "Format list of available / installed versions for PLUGIN."
-  (let* ((all (process-lines "asdf" "list-all" plugin))
-         (current "")
+(defun asdf--installed-versions (plugin)
+  "Get current and installed versions of PLUGIN."
+  (let* ((current)
          (installed
           (ignore-errors
             (cl-loop for version in (mapcar #'string-trim (process-lines "asdf" "list" plugin))
@@ -140,9 +139,12 @@ If LOCAL, use locally."
                      do (setq version (substring version 1)
                               current version)
                      collect version))))
-    ;; (mapcar #'string-trim (process-lines "asdf" "list" plugin))
-    ;; (current (asdf-current-version plugin))
-    (cl-loop for v in all
+    (cons current installed)))
+
+(defun asdf--versions (plugin)
+    "Format list of available / installed versions for PLUGIN."
+  (cl-destructuring-bind (current . installed) (asdf--installed-versions plugin)
+    (cl-loop for v in (process-lines "asdf" "list-all" plugin)
              collect (list v (vector v (if (cl-member v installed :test 'string=)
                                            (propertize "✓" 'face 'asdf-checkmark-face)
                                          "")
