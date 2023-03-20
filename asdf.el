@@ -4,7 +4,7 @@
 
 ;; Author: Noah Peart <noah.v.peart@gmail.com>
 ;; URL: https://github.com/nverno/asdf
-;; Package-Requires: 
+;; Package-Requires:
 ;; Created: 24 December 2016
 
 ;; This file is not part of GNU Emacs.
@@ -45,7 +45,7 @@
 (declare-function tabulated-list-get-entry "tabulated-list")
 
 (defgroup asdf nil
-  "asdf package manager"
+  "Asdf package manager."
   :group 'external)
 
 (defvar asdf-after-use-hook ()
@@ -53,7 +53,7 @@
 
 (defface asdf-checkmark-face
   '((t (:background "grey10" :foreground "green")))
-  "checkmark"
+  "Checkmark."
   :group 'asdf)
 
 (defalias 'asdf-completing-read 'completing-read)
@@ -61,10 +61,10 @@
 (defvar asdf-buffer-name "*asdf*")
 (defvar asdf-process-buffer-name "*asdf-process*")
 
-;; read version of PLUGIN from .tool-versions. Find first .tool-versions
-;; file by default, or if GLOBAL look in user's home dir or use
-;; GLOBAL-FILE if non-nil
 (defun asdf--read-version-file (plugin &optional global global-file)
+  "Read version of PLUGIN from .tool-versions.
+Find first .tool-versions file from current directory up, or if GLOBAL look
+in user's home dir or use GLOBAL-FILE if non-nil."
   (let ((conf
          (if (not global)
              (locate-dominating-file
@@ -77,8 +77,8 @@
                (concat "^" plugin " +\\([^ \t\n\r]+\\)") nil 'move)
           (match-string-no-properties 1))))))
 
-;; remove ^M from output, scroll to bottom, format a bit
 (defun asdf-process-filter (proc string)
+  "Remove ^M from PROC output STRING, scroll to bottom, and format a bit."
   (unless (string= string "")
     (with-current-buffer (process-buffer proc)
       (goto-char (point-max))
@@ -96,6 +96,8 @@
 
 ;;;###autoload
 (defun asdf-install (plugin version &optional error success)
+  "Install PLUGIN VERSION using asdf.
+Call ERROR and SUCCESS if non-nil according to process status."
   (interactive (asdf--read-plugin/version))
   (with-asdf-output "install" plugin version
     :error (if error (funcall error))
@@ -103,6 +105,8 @@
 
 ;;;###autoload
 (defun asdf-use (plugin version &optional local)
+  "Tell asdf to Use PLUGIN VERSION.
+If LOCAL, use locally."
   (interactive (asdf--read-plugin/version))
   (let ((res (call-process "asdf" nil nil nil
                            (if local "local" "global") plugin version)))
@@ -115,7 +119,7 @@
 (defun asdf-current-version (plugin)
   "Return current version for PLUGIN."
   (ignore-errors
-    (car (split-string (car (process-lines "asdf" "current" plugin)) "[ (]"))))
+    (cadr (split-string (car (process-lines "asdf" "current" plugin)) "[ (]+"))))
 
 ;;;###autoload
 (defun asdf-where (plugin)
@@ -125,20 +129,27 @@
 ;; -------------------------------------------------------------------
 ;;; List
 
-;; format list of available / installed versions for PLUGIN
 (defun asdf--versions (plugin)
-  (let ((all (process-lines "asdf" "list-all" plugin))
-        (inst (ignore-errors
-                (mapcar #'string-trim (process-lines "asdf" "list" plugin))))
-        (current (asdf-current-version plugin)))
+  "Format list of available / installed versions for PLUGIN."
+  (let* ((all (process-lines "asdf" "list-all" plugin))
+         (current "")
+         (installed
+          (ignore-errors
+            (cl-loop for version in (mapcar #'string-trim (process-lines "asdf" "list" plugin))
+                     when (string-prefix-p "*" version)
+                     do (setq version (substring version 1)
+                              current version)
+                     collect version))))
+    ;; (mapcar #'string-trim (process-lines "asdf" "list" plugin))
+    ;; (current (asdf-current-version plugin))
     (cl-loop for v in all
-       collect (list v (vector v (if (cl-member v inst :test 'string=)
-                                     (propertize "✓" 'face 'asdf-checkmark-face)
-                                   "")
-                               (if (string= v current)
-                                   (propertize "✓" 'face 'font-lock-warning-face)
-                                 "")
-                               plugin)))))
+             collect (list v (vector v (if (cl-member v installed :test 'string=)
+                                           (propertize "✓" 'face 'asdf-checkmark-face)
+                                         "")
+                                     (if (string= v current)
+                                         (propertize "✓" 'face 'font-lock-warning-face)
+                                       "")
+                                     plugin)))))
 
 ;;;###autoload
 (defun asdf-list (plugin)
@@ -158,7 +169,7 @@
 ;;; Interactive list mode functions
 
 (defun asdf-list-revert ()
-  "Revert asdf-list mode buffer."
+  "Revert `asdf-list' mode buffer."
   (interactive)
   (when (eq major-mode 'asdf-list-mode)
     (asdf-message "Reloading asdf-list...")
@@ -176,8 +187,9 @@
            (view-mode)))
        (display-buffer asdf-process-buffer-name)))
 
-;; switch asdf current version to version at point in `asdf-list-mode'
 (defun asdf-list-use (plugin version &optional local)
+  "Switch asdf PLUGIN current version to VERSION at point in `asdf-list-mode'.
+If LOCAL, use version locally."
   (interactive (asdf--list-name/version))
   (with-asdf-output (if local "local" "global") plugin version
     (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
@@ -185,10 +197,12 @@
   (run-hooks 'asdf-after-use-hook))
 
 (defun asdf-list-use-local (plugin version)
+  "Use PLUGIN VERSION locally."
   (interactive (asdf--list-name/version))
   (asdf-list-use plugin version 'local))
 
 (defun asdf-list-uninstall (plugin version)
+  "Uninstall PLUGIN VERSION."
   (interactive (asdf--list-name/version))
   (and (y-or-n-p (format "Uninstall %s %s?" plugin version))
        (with-asdf-output "uninstall" plugin version
@@ -196,6 +210,7 @@
          (asdf-message "uninstalled %s %s" plugin version))))
 
 (defun asdf-list-where (plugin version)
+  "Get install path for PLUGIN VERSION."
   (interactive (asdf--list-name/version))
   (with-asdf-output "where" plugin version
     (asdf-message "%s not installed" (tabulated-list-get-id))
@@ -229,12 +244,12 @@
     km))
 
 (define-derived-mode asdf-list-mode tabulated-list-mode "asdf"
-  "List of available asdf versions/plugings.\n
+  "List of available asdf versions/plugins.
 Commands: \n
 \\{asdf-list-mode-map}"
   (tabulated-list-init-header)
   (tabulated-list-print))
-        
+
 (define-derived-mode asdf-process-mode nil "asdf-process"
   nil
   (setq mode-line-process '(":%s")))
