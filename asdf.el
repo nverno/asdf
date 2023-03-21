@@ -37,8 +37,7 @@
   (require 'cl-lib)
   (require 'asdf-macs)
   (defvar tabulated-list-format)
-  (defvar tabulated-list-entries)
-  (defvar asdf-list-plugin))
+  (defvar tabulated-list-entries))
 
 (declare-function tabulated-list-init-header "tabulated-list")
 (declare-function tabulated-list-print "tabulated-list")
@@ -129,6 +128,12 @@ If LOCAL, use locally."
 ;; -------------------------------------------------------------------
 ;;; List
 
+(defvar-local asdf-list-plugin nil)
+
+(defvar-local asdf-list-show-all t)
+
+(defvar-local asdf-list-available-versions nil)
+
 (defun asdf--installed-versions (plugin)
   "Get current and installed versions of PLUGIN."
   (let* ((current)
@@ -141,10 +146,14 @@ If LOCAL, use locally."
                      collect version))))
     (cons current installed)))
 
-(defun asdf--versions (plugin)
-    "Format list of available / installed versions for PLUGIN."
+(defun asdf--versions (plugin &optional installed-only)
+  "Format list of available / installed versions for PLUGIN.
+If INSTALLED-ONLY, list only installed versions."
   (cl-destructuring-bind (current . installed) (asdf--installed-versions plugin)
-    (cl-loop for v in (process-lines "asdf" "list-all" plugin)
+    (cl-loop for v in (if installed-only installed
+                        (or asdf-list-available-versions
+                            (setq asdf-list-available-versions
+                                  (process-lines "asdf" "list-all" plugin))))
              collect (list v (vector v (if (cl-member v installed :test 'string=)
                                            (propertize "✓" 'face 'asdf-checkmark-face)
                                          "")
@@ -157,14 +166,18 @@ If LOCAL, use locally."
 (defun asdf-list (plugin)
   "List asdf managed versions for PLUGIN."
   (interactive (list (asdf-read 'plugin)))
-  (let ((ver (asdf--versions plugin)))
-    (with-current-buffer (asdf-list-buffer)
+  (with-current-buffer (asdf-list-buffer)
+    (setq asdf-list-available-versions nil)
+    (let ((ver (asdf--versions plugin))
+          (all asdf-list-available-versions))
       (setq tabulated-list-format `[(,plugin 20 t)
                                     ("Installed" 15 nil)
                                     ("Current" 10 nil)])
       (setq tabulated-list-entries (nreverse ver))
       (asdf-list-mode)
       (setq-local asdf-list-plugin plugin)
+      (setq-local asdf-list-show-all t)
+      (setq-local asdf-list-available-versions all)
       (pop-to-buffer (current-buffer)))))
 
 ;; -------------------------------------------------------------------
@@ -176,6 +189,14 @@ If LOCAL, use locally."
   (when (eq major-mode 'asdf-list-mode)
     (asdf-message "Reloading asdf-list...")
     (setq tabulated-list-entries (nreverse (asdf--versions asdf-list-plugin)))
+    (revert-buffer)))
+
+(defun asdf-list-toggle-visibility ()
+  "Toggle display between all available versions and only those installed."
+  (interactive)
+  (when (eq major-mode 'asdf-list-mode)
+    (setq tabulated-list-entries (nreverse (asdf--versions asdf-list-plugin asdf-list-show-all)))
+    (setq asdf-list-show-all (not asdf-list-show-all))
     (revert-buffer)))
 
 (defun asdf-list-install (plugin version)
@@ -229,6 +250,7 @@ If LOCAL, use version locally."
     ["Set local version" asdf-list-use-local t]
     ["Uninstall" asdf-list-uninstall t]
     ["Installation path" asdf-list-where t]
+    ["Toggle visibility" asdf-list-toggle-visibility t]
     ["Revert" asdf-list-revert t]))
 
 (defvar asdf-list-mode-map
@@ -243,6 +265,7 @@ If LOCAL, use version locally."
     (define-key km "l"         'asdf-list-use-local)
     (define-key km "u"         'asdf-list-uninstall)
     (define-key km "w"         'asdf-list-where)
+    (define-key km "t"         'asdf-list-toggle-visibility)
     km))
 
 (define-derived-mode asdf-list-mode tabulated-list-mode "asdf"
