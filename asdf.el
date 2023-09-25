@@ -149,11 +149,11 @@ If LOCAL, use locally."
                      collect version))))
     (cons current installed)))
 
-(defun asdf--versions (plugin &optional installed-only)
-  "Format list of available / installed versions for PLUGIN.
-If INSTALLED-ONLY, list only installed versions."
+(defun asdf--versions (plugin &optional available)
+  "Format list of installed versions for PLUGIN.
+If AVAILABLE, include available versions."
   (cl-destructuring-bind (current . installed) (asdf--installed-versions plugin)
-    (cl-loop for v in (if installed-only installed
+    (cl-loop for v in (if (not available) installed
                         (or asdf--list-available-versions
                             (setq asdf--list-available-versions
                                   (process-lines "asdf" "list-all" plugin))))
@@ -179,7 +179,6 @@ If INSTALLED-ONLY, list only installed versions."
       (setq tabulated-list-entries (nreverse ver))
       (asdf-list-mode)
       (setq-local asdf--list-plugin plugin)
-      (setq-local asdf--list-show-all t)
       (setq-local asdf--list-available-versions all)
       (pop-to-buffer (current-buffer)))))
 
