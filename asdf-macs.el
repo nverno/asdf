@@ -1,7 +1,5 @@
 ;;; asdf-macs.el ---  -*- lexical-binding: t; -*-
 
-;; This is free and unencumbered software released into the public domain.
-
 ;; Author: Noah Peart <noah.v.peart@gmail.com>
 ;; URL: https://github.com/nverno/asdf
 ;; Package-Requires: 
@@ -25,12 +23,17 @@
 ;; Floor, Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
+;;
+;; TODO(7/29/24): why are these macros?
+;;
 ;;; Code:
+
 (eval-when-compile
-  (require 'cl-lib)
-  (defvar asdf-buffer-name)
-  (defvar asdf-process-buffer-name))
+  (require 'cl-lib))
+
 (declare-function "asdf" asdf-completing-read)
+(defvar asdf-buffer-name)
+(defvar asdf-process-buffer-name)
 
 (defmacro asdf-message (format-string &rest args)
   (and format-string
@@ -85,17 +88,17 @@ If ALL is non-nil use the all version of the asdf command.
     (cond
      ((eq type 'plugin)
       `(asdf-completing-read
-        "Plugin: "
-        (asdf-process-lines ,(if all "plugin-list-all" "plugin-list"))))
+         "Plugin: "
+         (asdf-process-lines ,(if all "plugin-list-all" "plugin-list"))))
      ((eq type 'version)
       (if (and all (null plugin))
           (user-error "list-all must be called with a plugin"))
       `(asdf-completing-read
-        "Version: " (,@(if plugin '(nreverse) '(progn))
-                     (asdf-process-lines
-                      ,(if all "list-all" "list")
-                      ,@(delq nil (if all `(:process-fn 'identity ,plugin)
-                                    `(,plugin)))))))
+         "Version: " (,@(if plugin '(nreverse) '(progn))
+                      (asdf-process-lines
+                       ,(if all "list-all" "list")
+                       ,@(delq nil (if all `(:process-fn 'identity ,plugin)
+                                     `(,plugin)))))))
      (t (user-error "%S unknown to `asdf-read'." type)))))
 
 (defmacro asdf--read-plugin/version (&optional all)

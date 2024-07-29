@@ -1,11 +1,10 @@
-;;; asdf.el --- asdf version manager -*- lexical-binding: t; -*-
-
-;; This is free and unencumbered software released into the public domain.
+;;; asdf.el --- Asdf version manager -*- lexical-binding: t; -*-
 
 ;; Author: Noah Peart <noah.v.peart@gmail.com>
 ;; URL: https://github.com/nverno/asdf
 ;; Package-Requires:
 ;; Created: 24 December 2016
+;; Keywords: asdf convenience
 
 ;; This file is not part of GNU Emacs.
 ;;
@@ -25,13 +24,9 @@
 ;; Floor, Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
-
-;; [![Build Status](https://travis-ci.org/nverno/asdf.svg?branch=master)](https://travis-ci.org/nverno/asdf)
-
-;;; Description:
-
-;; emacs interface to [asdf version manager](https://github.com/asdf-vm/asdf)
-
+;;
+;; Emacs interface to [asdf version manager](https://github.com/asdf-vm/asdf)
+;;
 ;;; Code:
 (eval-when-compile
   (require 'cl-lib)
@@ -165,22 +160,25 @@ If AVAILABLE, include available versions."
                                        "")
                                      plugin)))))
 
+
 ;;;###autoload
 (defun asdf-list (plugin)
   "List asdf managed versions for PLUGIN."
   (interactive (list (asdf-read 'plugin)))
   (with-current-buffer (asdf-list-buffer)
     (setq asdf--list-available-versions nil)
-    (let ((ver (asdf--versions plugin asdf--list-show-all))
-          (all asdf--list-available-versions))
-      (setq tabulated-list-format `[(,plugin 20 t)
-                                    ("Installed" 15 nil)
-                                    ("Current" 10 nil)])
-      (setq tabulated-list-entries (nreverse ver))
-      (asdf-list-mode)
-      (setq-local asdf--list-plugin plugin)
-      (setq-local asdf--list-available-versions all)
-      (pop-to-buffer (current-buffer)))))
+    (cl-flet ((version-sort (a b)
+                (not (version< (car a) (car b)))))
+      (let ((ver (asdf--versions plugin asdf--list-show-all))
+            (all asdf--list-available-versions))
+        (setq tabulated-list-format `[(,plugin 20 version-sort)
+                                      ("Installed" 15 nil)
+                                      ("Current" 10 nil)])
+        (setq tabulated-list-entries (nreverse ver))
+        (asdf-list-mode)
+        (setq-local asdf--list-plugin plugin)
+        (setq-local asdf--list-available-versions all)
+        (pop-to-buffer (current-buffer))))))
 
 ;; -------------------------------------------------------------------
 ;;; Interactive list mode functions
@@ -272,6 +270,7 @@ If LOCAL, use version locally."
 
 (define-derived-mode asdf-list-mode tabulated-list-mode "asdf"
   "List of available asdf versions/plugins.
+
 Commands: \n
 \\{asdf-list-mode-map}"
   (tabulated-list-init-header)
