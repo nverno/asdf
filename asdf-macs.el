@@ -2,7 +2,7 @@
 
 ;; Author: Noah Peart <noah.v.peart@gmail.com>
 ;; URL: https://github.com/nverno/asdf
-;; Package-Requires: 
+;; Package-Requires:
 ;; Created:  1 September 2018
 
 ;; This file is not part of GNU Emacs.
@@ -35,13 +35,12 @@
 (defvar asdf-buffer-name)
 (defvar asdf-process-buffer-name)
 
-(defmacro asdf-message (format-string &rest args)
+(defsubst asdf-message (format-string &rest args)
   (and format-string
-       `(message
-         (string-remove-suffix
-          "\n"
-          (eval-when-compile ,(concat "[asdf]: " format-string)))
-         ,@args)))
+       (apply #'message
+              (string-remove-suffix
+               "\n" (concat "[asdf]: " format-string))
+              args)))
 
 (defmacro asdf-process-buffer (&optional no-erase)
   `(with-current-buffer (get-buffer-create asdf-process-buffer-name)
@@ -50,15 +49,16 @@
      (asdf-process-mode)
      (current-buffer)))
 
-(cl-defmacro asdf-process-lines (cmd &rest args &key process-fn &allow-other-keys)
+(cl-defmacro asdf-process-lines (cmd &rest args &key process-fn
+                                     &allow-other-keys)
   "Call `process-lines' with asdf CMD on args.
 If PROCESS-FN is non-nil, apply to each line of results (default trim ws)."
   (declare (debug t))
   (while (keywordp (car args))
     (setq args (cdr (cdr args))))
-  `(mapcar ,(or process-fn ''string-trim)
-           ,(if args `(funcall #'process-lines "asdf" ,cmd ,@args)
-              `(process-lines "asdf" ,cmd))))
+  `(delete "" (mapcar ,(or process-fn ''string-trim)
+                      ,(if args `(funcall #'process-lines "asdf" ,cmd ,@args)
+                         `(process-lines "asdf" ,cmd)))))
 
 (cl-defmacro with-asdf-output (cmd plugin version &rest body
                                    &key error &allow-other-keys)
@@ -66,17 +66,20 @@ If PROCESS-FN is non-nil, apply to each line of results (default trim ws)."
   (declare (indent 3) (debug t))
   (while (keywordp (car body))
     (setq body (cdr (cdr body))))
-  `(let* ((buff (asdf-process-buffer))
-          (proc (start-process "asdf" buff "asdf" ,cmd ,plugin ,version)))
-     (set-process-filter proc 'asdf-process-filter)
-     (set-process-sentinel
-      proc
-      #'(lambda (p m)
-          (asdf-message "%s" m)
-          (if (not (zerop (process-exit-status p)))
-              ,(if error `,error
-                 `(asdf-message "%s %s failed" ,plugin ,cmd))
-            ,@body)))))
+  (macroexp-let2* nil ((cmd cmd))
+    `(let* ((buff (asdf-process-buffer))
+            (args (append (if (listp ,cmd) ,cmd (list ,cmd))
+                          (list ,plugin ,version)))
+            (proc (apply #'start-process "asdf" buff "asdf" args)))
+       (set-process-filter proc 'asdf-process-filter)
+       (set-process-sentinel
+        proc
+        #'(lambda (p m)
+            (asdf-message "%s" m)
+            (if (not (zerop (process-exit-status p)))
+                ,(if error `,error
+                   `(asdf-message "%s: %S failed" ,plugin ,cmd))
+              ,@body))))))
 
 (defmacro asdf-read (type &optional plugin all)
   "Read asdf command of TYPE (listed below).
@@ -89,31 +92,20 @@ If ALL is non-nil use the all version of the asdf command.
      ((eq type 'plugin)
       `(asdf-completing-read
          "Plugin: "
-         (asdf-process-lines ,(if all "plugin-list-all" "plugin-list"))))
+         (asdf-process-lines "plugin" "list" ,@(and all '("all")))))
      ((eq type 'version)
       (if (and all (null plugin))
           (user-error "list-all must be called with a plugin"))
       `(asdf-completing-read
          "Version: " (,@(if plugin '(nreverse) '(progn))
                       (asdf-process-lines
-                       ,(if all "list-all" "list")
-                       ,@(delq nil (if all `(:process-fn 'identity ,plugin)
-                                     `(,plugin)))))))
+                       "list"
+                       :process-fn ,(if all ''identity
+                                      (lambda (s) (string-remove-prefix " *" s)))
+                       ,@(and all '("all"))
+                       ,plugin))))
      (t (user-error "%S unknown to `asdf-read'." type)))))
 
-(defmacro asdf--read-plugin/version (&optional all)
-  (let ((p (make-symbol "plugin")))
-    `(let ((,p (asdf-read 'plugin ,all)))
-       (list ,p (asdf-read 'version ,p ,all)))))
-
-;; -------------------------------------------------------------------
-;;; List mode
-
-(defmacro asdf--list-name/version ()
-  '(list (aref (tabulated-list-get-entry) 3) (tabulated-list-get-id)))
-
-(defmacro asdf-list-buffer ()
-  '(get-buffer-create asdf-buffer-name))
 
 (provide 'asdf-macs)
 ;;; asdf-macs.el ends here

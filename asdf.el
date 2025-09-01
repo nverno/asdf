@@ -90,6 +90,10 @@ in user's home dir or use GLOBAL-FILE if non-nil."
 ;; -------------------------------------------------------------------
 ;;; General commands
 
+(defsubst asdf--read-plugin/version (&optional local)
+  (let ((plugin (asdf-read 'plugin nil)))
+    (list plugin (asdf-read 'version plugin) local)))
+
 ;;;###autoload
 (defun asdf-install (plugin version &optional error success)
   "Install PLUGIN VERSION using asdf.
@@ -103,9 +107,10 @@ Call ERROR and SUCCESS if non-nil according to process status."
 (defun asdf-use (plugin version &optional local)
   "Tell asdf to Use PLUGIN VERSION.
 If LOCAL, use locally."
-  (interactive (asdf--read-plugin/version))
-  (let ((res (call-process "asdf" nil nil nil
-                           (if local "local" "global") plugin version)))
+  (interactive (asdf--read-plugin/version current-prefix-arg))
+  (let ((res (apply #'call-process
+                    "asdf" nil nil nil
+                    (delq nil (list "set" (unless local "-u") plugin version)))))
     (if (not (zerop res))
         (asdf-message "%s" res)
       (asdf-message "using %s %s" plugin version)
@@ -115,7 +120,9 @@ If LOCAL, use locally."
 (defun asdf-current-version (plugin)
   "Return current version for PLUGIN."
   (ignore-errors
-    (cadr (split-string (car (process-lines "asdf" "current" plugin)) "[ (]+"))))
+    (cadr (split-string
+           (car (process-lines "asdf" "current" "--no-header" plugin))
+           "[ (]+"))))
 
 ;;;###autoload
 (defun asdf-where (plugin)
@@ -130,6 +137,12 @@ If LOCAL, use locally."
 (defvar-local asdf--list-show-all asdf-list-all-default)
 
 (defvar-local asdf--list-available-versions nil)
+
+(defsubst asdf-list-buffer ()
+  (get-buffer-create asdf-buffer-name))
+
+(defsubst asdf--list-name/version ()
+  (list (aref (tabulated-list-get-entry) 3) (tabulated-list-get-id)))
 
 (defun asdf--installed-versions (plugin)
   "Get current and installed versions of PLUGIN."
@@ -151,7 +164,8 @@ If AVAILABLE, include available versions."
     (cl-loop for v in (if (not available) installed
                         (or asdf--list-available-versions
                             (setq asdf--list-available-versions
-                                  (process-lines "asdf" "list-all" plugin))))
+                                  (delete "" (process-lines
+                                              "asdf" "list" "all" plugin)))))
              collect (list v (vector v (if (cl-member v installed :test 'string=)
                                            (propertize "✓" 'face 'asdf-checkmark-face)
                                          "")
@@ -214,8 +228,9 @@ If AVAILABLE, include available versions."
   "Switch asdf PLUGIN current version to VERSION at point in `asdf-list-mode'.
 If LOCAL, use version locally."
   (interactive (asdf--list-name/version))
-  (with-asdf-output (if local "local" "global") plugin version
-    (with-current-buffer (asdf-list-buffer) (asdf-list-revert))
+  (with-asdf-output (if local "set" '("set" "-u")) plugin version
+    (with-current-buffer (asdf-list-buffer)
+      (asdf-list-revert))
     (asdf-message "%s %s using %s" (if local "local" "global") plugin version))
   (run-hooks 'asdf-after-use-hook))
 
